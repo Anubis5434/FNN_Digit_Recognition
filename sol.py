@@ -1,6 +1,6 @@
 import numpy as np
 
-from hw4_lib import Linear, Sigmoid, CrossEntropyLoss, Module
+from lib import Linear, Sigmoid, CrossEntropyLoss, Module
 
 
 # NOTATION
