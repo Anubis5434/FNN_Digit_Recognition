@@ -1,5 +1,5 @@
 import numpy as np
-from hw4_lib import *
+from lib import *
 import matplotlib.pyplot as plt
 
 # NOTATION
