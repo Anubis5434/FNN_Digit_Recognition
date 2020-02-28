@@ -42,7 +42,7 @@ class Module:
         assert self.params.keys() == self.grads.keys()
         for name in self.params:
             full_name = '.'.join(base + (name,))
-            yield (full_name, self.params[name], self.grads[name])
+            yield full_name, self.params[name], self.grads[name]
 
         # recursively on others
         for child_name, child in self.children.items():
@@ -62,9 +62,7 @@ def sigmoid(x):
     :param x: np.ndarray
     :return: np.ndarray, same shape as x, elementwise sigmoid of x
     """
-    return 1 / (1 + np.exp(x))
-    # ### TYPE HERE AND REMOVE `pass` below ###
-    # pass
+    return 1 / (1 + np.exp(-x))
 
 
 class Sigmoid(Module):
@@ -80,9 +78,8 @@ class Sigmoid(Module):
 
         this layer computes \vec{z} given \vec{a}.
         """
+        self.cache['sigma'] = sigmoid(x)
         return sigmoid(x)
-        # ### TYPE HERE AND REMOVE `pass` below ###
-        # pass
 
     def backward(self, g):
         """
@@ -91,10 +88,9 @@ class Sigmoid(Module):
         :return: np.ndarray, shape (N, in_features), the gradient of
                  loss w.r.t. input of this layer.
         """
-        sigma = self.forward(self.params)
-        return g * sigma * (1 - sigma)
-        # ### TYPE HERE AND REMOVE `pass` below ###
-        # pass
+        sigma = self.cache['sigma']
+        g_input = g * sigma * (1 - sigma)
+        return g_input
 
 
 class Linear(Module):
@@ -114,18 +110,23 @@ class Linear(Module):
         this layer computes \vec{a} given \vec{x},
         or \vec{b} given \vec{z}.
         """
-        x_out = np.concatenate((np.ones((x.shape[0], 1)), x), axis=1)
-        weight_out = np.concatenate(self.bias, self.weight, axis=1)
-        return x_out * weight_out
-        # ### TYPE HERE AND REMOVE `pass` below ###
-        # pass
+        x_out = np.concatenate((np.ones((x.shape[0], 1)), x), axis=1)  # shape(N, in + 1)
+        self.cache['x_out'] = x_out
+        bias_reshape = self.params['bias'].reshape((self.params['bias'].shape[0], 1))  # shape(out, 1)
+        weight_out = np.concatenate((bias_reshape, self.params['weight']), axis=1)  # shape(out, in + 1)
+        self.cache['weight_out'] = weight_out
+        output = weight_out @ x_out.T
+        return output.T  # shape(N, out)
 
     def backward(self, g):
         """g is of shape (N, out_features)
         g_input should be of shape (N, in_features)"""
-
-        # ### TYPE HERE AND REMOVE `pass` below ###
-        # pass
+        updater = g.T @ self.cache["x_out"]  # shape(out, in + 1)
+        self.grads['weight'] += updater[:, 1:]  # shape(out, in)
+        self.grads['bias'] += updater[:, 0]  # shape(out,)
+        g_input_origin = g @ self.cache['weight_out']  # shape(N, in + 1)
+        g_input = g_input_origin[:, 1:]  # shape(N, in)
+        return g_input
 
 
 class CrossEntropyLoss(Module):
@@ -143,10 +144,22 @@ class CrossEntropyLoss(Module):
         :return: the mean negative cross entropy loss
                ($J(\alpha, \beta)$ in the write up).
         """
-        ### TYPE HERE AND REMOVE `pass` below ###
-        pass
+        N = score.shape[0]
+        self.cache['N'] = N
+        label = label.reshape((N, 1))  # shape(N, 1)
+        trans_label = np.zeros((N, score.shape[1]))  # shape(N, C)
+        for i in range(N):
+            flag = label[i][0]
+            trans_label[i, flag] = 1
+        self.cache['label'] = trans_label
+        exps = np.exp(score - np.max(score))  # shape(N, C)
+        y_Hat = exps / np.sum(exps, axis=1).reshape((-1, 1))  # shape(N, C)
+        self.cache['y_Hat'] = y_Hat
+        cross_entropy_loss = (-1 / N) * np.sum(np.log(y_Hat) * trans_label)
+        self.cache['loss'] = cross_entropy_loss
+        self.cache['label_predict'] = np.argmax(y_Hat, axis=1)
+        return cross_entropy_loss
 
     def backward(self):
         """returns the gradient of loss w.r.t. `score`"""
-        ### TYPE HERE AND REMOVE `pass` below ###
-        pass
+        return (-1 / self.cache['N']) * (self.cache['label'] - self.cache['y_Hat'])

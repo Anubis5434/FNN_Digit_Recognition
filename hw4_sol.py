@@ -1,7 +1,6 @@
 import numpy as np
-
-from hw4_lib import Linear, Sigmoid, CrossEntropyLoss, Module
-
+from hw4_lib import *
+import matplotlib.pyplot as plt
 
 # NOTATION
 # in the comments below
@@ -10,6 +9,7 @@ from hw4_lib import Linear, Sigmoid, CrossEntropyLoss, Module
 #     out_features is the output size
 #     C is number of classes (10 for this assignment)
 #     E is the number of epochs
+
 
 def compute_linear(x: np.ndarray,
                    weight: np.ndarray,
@@ -44,9 +44,13 @@ def compute_linear(x: np.ndarray,
          'grad_bias':  np.ndarray, shape (out_features,), the gradient
                        of loss w.r.t. bias of this layer
     """
-
-    ### TYPE HERE AND REMOVE `pass` below ###
-    pass
+    result = {}
+    linear1 = Linear(weight, bias)
+    result["output"] = linear1.forward(x)
+    result['grad_input'] = linear1.backward(grad_higher)
+    result['grad_weight'] = linear1.grads["weight"]
+    result['grad_bias'] = linear1.grads['bias']
+    return result
 
 
 def compute_sigmoid(x: np.ndarray, grad_higher: np.ndarray):
@@ -68,9 +72,11 @@ def compute_sigmoid(x: np.ndarray, grad_higher: np.ndarray):
                        of loss w.r.t. the input of this layer
 
     """
-
-    ### TYPE HERE AND REMOVE `pass` below ###
-    pass
+    result = {}
+    sig = Sigmoid()
+    result['output'] = sig.forward(x)
+    result['grad_input'] = sig.backward(grad_higher)
+    return result
 
 
 def compute_crossentropy(score: np.ndarray,
@@ -93,9 +99,11 @@ def compute_crossentropy(score: np.ndarray,
         'grad_input': np.ndarray, shape (N, C), the gradient of loss
                       w.r.t. the score
     """
-
-    ### TYPE HERE AND REMOVE `pass` below ###
-    pass
+    result = {}
+    c_e = CrossEntropyLoss()
+    result["output"] = c_e.forward(score, label)
+    result['grad_input'] = c_e.backward()
+    return result
 
 
 class HW4NN(Module):
@@ -104,8 +112,20 @@ class HW4NN(Module):
                  weight_l2, bias_l2,
                  ):
         super().__init__()
-        ### TYPE HERE AND REMOVE `pass` below ###
-        pass
+        # register the parameters
+
+        # initialize and register the child module
+        linear_l1 = Linear(weight_l1, bias_l1)
+        self._register_child('linear_l1', linear_l1)
+
+        sigmoid1 = Sigmoid()
+        self._register_child('sigmoid', sigmoid1)
+
+        linear_l2 = Linear(weight_l2, bias_l2)
+        self._register_child('linear_l2', linear_l2)
+
+        C_E_L = CrossEntropyLoss()
+        self._register_child('C_E_L', C_E_L)
 
     def forward(self, x, y):
         """
@@ -114,12 +134,22 @@ class HW4NN(Module):
 
         :return: the mean negative cross entropy loss
         """
-        ### TYPE HERE AND REMOVE `pass` below ###
-        pass
+        # print(x)
+        a = self.children['linear_l1'].forward(x)
+        # print('pre sig', a)
+        z = self.children['sigmoid'].forward(a)
+        # print('post sig', z)
+        b = self.children['linear_l2'].forward(z)
+        c_e_l = self.children['C_E_L'].forward(b, y)
+        return c_e_l
 
     def backward(self):
-        ### TYPE HERE AND REMOVE `pass` below ###
-        pass
+        partial_cel_bk = self.children['C_E_L'].backward()
+        partial_cel_z = self.children['linear_l2'].backward(partial_cel_bk)
+        partial_cel_beta = self.children['linear_l2'].params['weight']
+        partial_cel_a = self.children['sigmoid'].backward(partial_cel_z)
+        partial_cel_alpha = self.children['linear_l1'].backward(partial_cel_a)
+        return partial_cel_alpha, partial_cel_beta
 
 
 def define_network(init_scheme,
@@ -137,20 +167,23 @@ def define_network(init_scheme,
     :param size_output: number of output classes. can be ignored (10 for this
            assignment)
     """
-
     rng_state = np.random.RandomState(seed=seed)
 
     # generate weights according to init_scheme
-    ### TYPE HERE AND REMOVE `pass` below ###
-    pass
+    if init_scheme == 'random':
+        weight_l1 = rng_state.randn(num_hidden, size_input)
+        weight_l2 = rng_state.randn(size_output, num_hidden)
+    if init_scheme == 'zero':
+        weight_l1 = np.zeros((num_hidden, size_input))
+        weight_l2 = np.zeros((size_output, num_hidden))
 
     # generate bias
-    ### TYPE HERE AND REMOVE `pass` below ###
-    pass
+    bias_l1 = np.zeros((num_hidden,))
+    bias_l2 = np.zeros((size_output,))
 
     # generate network
-    ### TYPE HERE AND REMOVE `pass` below ###
-    pass
+    nn = HW4NN(weight_l1, bias_l1, weight_l2, bias_l2)
+    return nn
 
 
 def clear_grad(nn):
@@ -160,8 +193,8 @@ def clear_grad(nn):
     """
     clear the gradient in the parameters and replace them with 0's
     """
-    ### TYPE HERE AND REMOVE `pass` below ###
-    pass
+    for name, param, grad in nn.named_parameters():
+        grad[...] = 0
 
 
 def update_param(nn, lr):
@@ -172,8 +205,8 @@ def update_param(nn, lr):
     """
     update the parameters of the network
     """
-    ### TYPE HERE AND REMOVE `pass` below ###
-    pass
+    for name, param, grad in nn.named_parameters():
+        param -= lr * grad
 
 
 def train_network(nn, dataset, num_epoch,
@@ -233,7 +266,6 @@ def train_network(nn, dataset, num_epoch,
         else:
             # this is for empirical questions.
             shulffe_idx = rng_state.permutation(train_y.size)
-
         for idx_example in shulffe_idx:  # for each training sample.
             x_this = train_x[idx_example:idx_example + 1]
             y_this = train_y[idx_example:idx_example + 1]
@@ -258,9 +290,8 @@ def train_network(nn, dataset, num_epoch,
         # obtained at the END of this epoch,
         # i.e. you should NOT compute this loss ON THE FLY by averaging
         # intermediate training losses DURING this epoch.
-        #
-        ### TYPE HERE AND REMOVE `pass` below ###
-        pass
+        nn.forward(train_x, train_y)
+        training_loss_this_epoch = nn.children["C_E_L"].cache['loss']
 
         # record training loss
         # this float() is just there so that result can be JSONified easily
@@ -268,22 +299,20 @@ def train_network(nn, dataset, num_epoch,
 
         # generate predicted labels for training data
         # yhat_train_all should be a 1d vector of same shape as train_y
-        ### TYPE HERE AND REMOVE `pass` below ###
-        pass
+        yhat_train_all = nn.children['C_E_L'].cache['label_predict']
 
         # record training error
         training_error_all.append(float((yhat_train_all != train_y).mean()))
 
         # training_loss_this_epoch is average loss over training data.
-        ### TYPE HERE AND REMOVE `pass` below ###
-        pass
+        nn.forward(test_x, test_y)
+        testing_loss_this_epoch = nn.children["C_E_L"].cache['loss']
 
         # record testing loss
         testing_loss_all.append(float(testing_loss_this_epoch))
 
         # generate yhat for testing data
-        ### TYPE HERE AND REMOVE `pass` below ###
-        pass
+        yhat_test_all = nn.children['C_E_L'].cache['label_predict']
 
         # record testing error
         testing_error_all.append(float((yhat_test_all != test_y).mean()))
@@ -295,7 +324,6 @@ def train_network(nn, dataset, num_epoch,
         'test_loss': testing_loss_all,
         'train_error': training_error_all,
         'test_error': testing_error_all,
-
         # yhat of the final model at the last epoch.
         # tolist for JSON.
         'yhat_train': yhat_train_all.tolist(),
@@ -316,9 +344,8 @@ def autolab_trainer(dataset, init_scheme, num_hidden,
            can be ignored fir this assignment
     :return: return value of `train_network`.
     """
-    ### TYPE HERE AND REMOVE `pass` below ###
-    pass
-
+    nn = define_network(init_scheme, num_hidden)
+    return train_network(nn, dataset, num_epoch, learning_rate)
 
 # how to test your solution locally.
 
@@ -328,6 +355,7 @@ def autolab_trainer(dataset, init_scheme, num_hidden,
 
 # how to generate dataset ready for `train_network`
 # when you are testing your data.
+
 
 def load_data():
     data_train = np.genfromtxt('train.csv', dtype=np.float64, delimiter=',')
@@ -342,3 +370,17 @@ def load_data():
         'test_x': data_test[:, :-1].astype(np.float64),
         'test_y': data_test[:, -1].astype(np.int64),
     }
+
+
+if __name__ == "__main__":
+    NN = define_network('random', num_hidden=100)
+    num_epoch = 200
+    dataset = load_data()
+    train_result = train_network(NN, dataset, num_epoch, 0.01)
+    # result
+    print(train_result['train_error'], '\n', train_result['test_error'])
+    plt.plot(x, train_result['train_error'], label='trainError')
+    plt.plot(x, train_result['test_error'], label='testError')
+    plt.legend()
+    plt.xlabel('num_epoch')
+    plt.show()
